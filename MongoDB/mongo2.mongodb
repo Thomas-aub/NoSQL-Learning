@@ -1,0 +1,132 @@
+use mif04;
+
+/////////////////////////////////////////////////
+// Premières requêtes
+/////////////////////////////////////////////////
+
+// 2.1 Pour chacune des collections `grades` et `zip`, récupérer un document,
+// puis en déduire un type pour les éléments de cette collection.
+
+db.grades.findOne();
+// type: < _id: ObjectId,
+//         student_id: int, 
+//         class_id: int,
+//         scores: arr(< type: string, score: float >)
+//       >
+db.zips.findOne();
+// type: <  _id: string,
+//          city: string,
+//          loc: array(float),
+//          pop: int, 
+//          state: string 
+//       >
+
+// 2.2 Récupérer quelques documents de grades et vérifier qu'ils sont conformes
+// au type de la question précédente.
+db.grades.find({});
+
+// 2.3 Donner le nombre de résultats de la requête précédente (résultat attendu:
+// 280).
+db.grades.countDocuments();
+
+// 2.4 Récupérer les documents dont le `class_id` vaut `20` dans la collection
+// `grades` (7 résultats).
+db.grades.find({ class_id: 20}) /*.count()*/;
+db.grades.countDocuments({ class_id: 20}) /* .count() deprecated */
+
+// 2.5 Récupérer les documents dont le `class_id` est inférieur ou égal à `20`.
+// L'opérateur inférieur ou égal se note `$lte`. (188 résultats)
+db.grades.find({ class_id: { $lte: 20 }}) /*.count()*/;
+db.grades.countDocuments({ class_id: { $lte: 20 }}) 
+
+// 2.6 Récupérer les documents pour lesquels le `student_id` est supérieur ou
+// égal au `class_id` (188 résultats).
+db.grades.find({ $expr: { $gte: [ "$student_id", "$class_id" ] }}) /*.count()*/;
+
+// 2.7 Récupérer les documents dont le `class_id` est compris entre `10`et `20`
+// (100 résultats). (2 versions)
+
+db.grades.find({ class_id: { $lte: 20, $gte: 10 }}) /*.count()*/;
+db.grades.find({ $expr: { $and: [ 
+    { $lte: ["$class_id", 20] },
+    { $gte: ["$class_id", 10] },
+] }}) /*.count()*/;
+
+// 2.8 Donner tous les documents de la collection avec un champ supplémentaire
+// qui est la somme des champs `class_id` et `student_id`.
+db.grades.find({}, { 
+    ue: "$class_id",
+    etu: "$student_id",
+	somme: { $add: [ "$class_id", "$student_id"]}
+    }) /*.count()*/;
+
+
+/////////////////////////////////////////////////
+// Prise en main de quelques étapes d'agrégation
+/////////////////////////////////////////////////
+
+// 3.1 Reprendre la requête précédente, mais en utilisant le pipeline
+// d'agrégation avec un `$project`.
+db.grades.aggregate([
+    { $project: {
+        somme: { $add: [ "$class_id", "$student_id"]},
+        class_id: 1,
+        student_id: 1,
+    }},
+    // { $count: "count" },
+]);
+
+// 3.2 Dans la collection `zips` récupérer les documents ayant une population
+// supérieure ou égale à `10000` (7634 résultats).
+db.zips.aggregate([
+    { $match: { pop: { $gte: 10000 } } },
+    // { $count: "count" },
+]);
+
+// 3.3 Dans la collection `grades`, renvoyer les documents triés par `class_id`,
+// puis par `student_id` (par ordre croissant pour les 2 champs).
+db.grades.aggregate([
+    { $sort: { class_id: 1, student_id: 1 } }
+    // { $count: "count" },
+]);
+
+// 3.4 Dans la collection `grades`, produire un document pour chaque élément du
+// tableau contenu dans le champ `scores`.
+db.grades.aggregate([
+    { $unwind: "$scores" },
+    // { $count: "count" },
+]);
+
+// 3.5 Dans la collection `zips`, donner pour chaque ville la population
+// minimale.
+db.zips.aggregate([
+    { $group: {
+        _id: "$city",
+        minpop: { $min: "$pop" },
+    }}
+    // { $count: "count" },
+]);
+
+// 3.6 Effectuer une jointure entre `grades` et `zips` sur les champs
+// `student_id` et `pop`. Quel est le type du résultat ?
+db.grades.aggregate([
+    { $lookup: {
+        from: "zips", 
+        localField: "student_id", 
+        foreignField: "pop",
+        as: "zipsdocs",
+    }},
+    // { $count: "count" },
+]);
+
+// type: < _id: ObjectId,
+//         student_id: int, 
+//         class_id: int,
+//         scores: arr(< type: string, score: float >)
+//         zipsdocs: arr(< _id: string,
+//                         city: string,
+//                         loc: array(float),
+//                         pop: int, 
+//                         state: string 
+//                       >)
+//       >
